@@ -249,7 +249,12 @@ const Overview = ({ setActiveTab }) => {
                                 <span className="badge bg-danger">High Usage</span>
                                 <span className="small text-dark fw-medium text-truncate">Kitchen usage is 50% higher than average. Check appliances.</span>
                             </div>
-                            <button className="btn btn-sm btn-link text-danger p-0 text-decoration-none small fw-bold">View All</button>
+                            <button
+                                className="btn btn-sm btn-link text-danger p-0 text-decoration-none small fw-bold"
+                                onClick={() => setActiveTab('usage-breakdown')}
+                            >
+                                View All
+                            </button>
                         </div>
                     </div>
                 </div>

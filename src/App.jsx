@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Zap, Activity, Cloud, BarChart2, Home, MessageSquare, LayoutDashboard, PieChart, X, Bot } from 'lucide-react';
-// import Monitoring from './components/Monitoring';
 import Monitoring from './components/Monitoring'
 import Forecast from './components/Forecast';
 import Chatbot from './components/Chatbot';
@@ -10,14 +9,21 @@ import UsageBreakdown from './components/UsageBreakdown';
 function App() {
     const [activeTab, setActiveTab] = useState('overview');
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    // Update date every minute to keep timeline consistent across all tabs
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentDate(new Date()), 60000);
+        return () => clearInterval(timer);
+    }, []);
 
     const renderContent = () => {
         switch (activeTab) {
-            case 'overview': return <Overview setActiveTab={setActiveTab} />;
-            case 'monitoring': return <Monitoring />;
-            case 'usage-breakdown': return <UsageBreakdown setActiveTab={setActiveTab} />;
-            case 'forecast': return <Forecast />;
-            default: return <Overview setActiveTab={setActiveTab} />;
+            case 'overview': return <Overview setActiveTab={setActiveTab} currentDate={currentDate} />;
+            case 'monitoring': return <Monitoring currentDate={currentDate} />;
+            case 'usage-breakdown': return <UsageBreakdown setActiveTab={setActiveTab} currentDate={currentDate} />;
+            case 'forecast': return <Forecast currentDate={currentDate} />;
+            default: return <Overview setActiveTab={setActiveTab} currentDate={currentDate} />;
         }
     };
 
@@ -28,7 +34,7 @@ function App() {
                 <div className="container">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold mb-2" style={{ fontSize: '2.5rem', fontWeight: '800' }}>TNB Energy Guardian</h1>
+                            <h1 className="text-3xl font-bold mb-2" style={{ fontSize: '2.5rem', fontWeight: '800' }}>WattsUp</h1>
                             <p className="opacity-80 text-lg">Empowering Clean & Affordable Energy (SDG 7)</p>
                         </div>
                         <div className="flex items-center gap-6">
@@ -87,19 +93,40 @@ function App() {
             {/* Floating Chatbot Panel */}
             <Chatbot isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
 
-            {/* Floating AI Help Button */}
+            {/* Enhanced Floating AI Assistant Button */}
             <button
-                className="fixed h-14 w-14 rounded-full shadow-lg text-white hover:scale-105 transition-all duration-300 z-50 flex items-center justify-center border-2 border-white"
+                className="fixed rounded-full shadow-2xl text-white hover:scale-105 transition-all duration-300 z-50 flex items-center justify-center gap-2 border-2 border-white font-semibold"
                 onClick={() => setIsChatOpen(!isChatOpen)}
-                style={{ zIndex: 100, right: '24px', bottom: '24px', backgroundColor: '#2563EB' }}
-                aria-label="Toggle AI Assistant"
+                style={{
+                    zIndex: 100,
+                    right: '24px',
+                    bottom: '24px',
+                    background: isChatOpen
+                        ? 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
+                        : 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                    padding: '12px 20px',
+                    boxShadow: isChatOpen
+                        ? '0 10px 40px rgba(239, 68, 68, 0.4), 0 0 20px rgba(239, 68, 68, 0.3)'
+                        : '0 10px 40px rgba(16, 185, 129, 0.4), 0 0 20px rgba(16, 185, 129, 0.3)'
+                }}
+                aria-label={isChatOpen ? "Close AI Assistant" : "Open AI Assistant"}
             >
-                {isChatOpen ? <X size={24} /> : <MessageSquare size={24} fill="currentColor" />}
+                {isChatOpen ? (
+                    <>
+                        <X size={20} strokeWidth={2.5} />
+                        <span className="text-sm">Close</span>
+                    </>
+                ) : (
+                    <>
+                        <Bot size={20} strokeWidth={2.5} />
+                        <span className="text-sm">AI Assistant</span>
+                    </>
+                )}
             </button>
 
             {/* Footer */}
             <footer className="container mt-12 py-8 border-t border-gray-200 text-center text-gray-500 text-sm">
-                <p>© 2024 Tenaga Nasional Berhad. All rights reserved.</p>
+                <p>© 2024 WattsUp. All rights reserved.</p>
                 <p className="mt-2">Promoting Sustainable Energy for a Better Future.</p>
             </footer>
         </div>
