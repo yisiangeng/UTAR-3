@@ -1,0 +1,493 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { Bar, Line } from 'react-chartjs-2';
+import { ArrowLeft, Calendar, Clock, PieChart, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+
+const UsageBreakdown = ({ setActiveTab }) => {
+    // State
+    const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    const [selectedBarDate, setSelectedBarDate] = useState(null); // Track explicitly selected bar
+    const [selectedHour, setSelectedHour] = useState(null);
+    const [weekOffset, setWeekOffset] = useState(0); // 0 = current week, 1 = previous week, etc.
+    // Use selectedDate for hourly view date as well, but keep format consistent
+    // We need a full date string YYYY-MM-DD for the date picker
+    const [hourlyViewDate, setHourlyViewDate] = useState(new Date().toISOString().split('T')[0]);
+
+    // Initial breakdown state
+    const [breakdownData, setBreakdownData] = useState({
+        AC: 45,
+        Kitchen: 30,
+        Laundry: 15,
+        Other: 10
+    });
+
+    // Comparison breakdown state
+    const [comparisonBreakdownData, setComparisonBreakdownData] = useState(null);
+
+    // --- Static Data Definition ---
+
+    // Helper to get dates for a specific week offset
+    const getWeekDates = (offset) => {
+        const days = [];
+        const today = new Date();
+        // Adjust today by offset weeks (offset * 7 days)
+        today.setDate(today.getDate() - (offset * 7));
+
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            days.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+        }
+        return days;
+    };
+
+    const weekLabels = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
+    const hourLabels = Array.from({ length: 24 }, (_, i) => `${i}:00`);
+
+    // Pseudo-random generator for consistent data based on string seed
+    const pseudoRandom = (seed) => {
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) {
+            hash = ((hash << 5) - hash) + seed.charCodeAt(i);
+            hash |= 0;
+        }
+        const x = Math.sin(hash) * 10000;
+        return x - Math.floor(x);
+    };
+
+    // Define static weekly data structure for lookup
+    const generateWeeklyData = (labels, offset) => {
+        const data = {};
+        labels.forEach((date, i) => {
+            const seed = date + offset; // Unique seed per date and week
+            data[date] = {
+                AC: 20 + Math.floor(pseudoRandom(seed + 'AC') * 10),
+                Kitchen: 15 + Math.floor(pseudoRandom(seed + 'Kitchen') * 8),
+                Laundry: 10 + Math.floor(pseudoRandom(seed + 'Laundry') * 5),
+                Other: 5 + Math.floor(pseudoRandom(seed + 'Other') * 3)
+            };
+        });
+        return data;
+    };
+
+    const weeklyDataMap = useMemo(() => generateWeeklyData(weekLabels, weekOffset), [weekLabels, weekOffset]);
+
+    // Define static hourly data structure for lookup
+    const generateHourlyData = (dateStr) => {
+        const data = {};
+        hourLabels.forEach((hour, i) => {
+            const seed = dateStr + hour; // Unique seed per date and hour
+            data[hour] = {
+                AC: Math.max(1, (pseudoRandom(seed + 'AC') * 5 + 2).toFixed(1)),
+                Kitchen: Math.max(0.5, (pseudoRandom(seed + 'Kitchen') * 3 + 1).toFixed(1)),
+                Laundry: Math.max(0.2, (pseudoRandom(seed + 'Laundry') * 2 + 0.5).toFixed(1)),
+                Other: (pseudoRandom(seed + 'Other') * 1 + 0.5).toFixed(1)
+            };
+        });
+        return data;
+    };
+
+    const hourlyDataMap = useMemo(() => generateHourlyData(hourlyViewDate), [hourlyViewDate]);
+
+    // Last Month Average Data (Simulated)
+    // Assuming a constant average for simplicity, or we could vary it slightly.
+    // Let's use a fixed average for daily total and submeters to represent "Last Month's Average".
+    const lastMonthAverage = useMemo(() => ({
+        total: 55, // Average daily total
+        AC: 25,
+        Kitchen: 18,
+        Laundry: 8,
+        Other: 4
+    }), []);
+
+    // Chart Data Objects (Visuals)
+    const weeklyChartData = {
+        labels: weekLabels,
+        datasets: [
+            {
+                label: 'AC',
+                data: weekLabels.map(date => weeklyDataMap[date].AC),
+                backgroundColor: weekLabels.map(date => selectedBarDate === null || date === selectedBarDate ? '#0d6efd' : 'rgba(13, 110, 253, 0.3)'),
+                stack: 'Stack 0',
+            },
+            {
+                label: 'Kitchen',
+                data: weekLabels.map(date => weeklyDataMap[date].Kitchen),
+                backgroundColor: weekLabels.map(date => selectedBarDate === null || date === selectedBarDate ? '#ffc107' : 'rgba(255, 193, 7, 0.3)'),
+                stack: 'Stack 0',
+            },
+            {
+                label: 'Laundry',
+                data: weekLabels.map(date => weeklyDataMap[date].Laundry),
+                backgroundColor: weekLabels.map(date => selectedBarDate === null || date === selectedBarDate ? '#198754' : 'rgba(25, 135, 84, 0.3)'),
+                stack: 'Stack 0',
+            },
+            {
+                label: 'Other',
+                data: weekLabels.map(date => weeklyDataMap[date].Other),
+                backgroundColor: weekLabels.map(date => selectedBarDate === null || date === selectedBarDate ? '#6c757d' : 'rgba(108, 117, 125, 0.3)'),
+                stack: 'Stack 0',
+                borderRadius: { topLeft: 4, topRight: 4 },
+            }
+        ]
+    };
+
+    const hourlyChartData = {
+        labels: hourLabels,
+        datasets: [
+            {
+                label: 'Hourly Usage (kWh)',
+                // Sum of all categories for the line chart total
+                data: hourLabels.map(hour => {
+                    const d = hourlyDataMap[hour];
+                    return (parseFloat(d.AC) + parseFloat(d.Kitchen) + parseFloat(d.Laundry) + parseFloat(d.Other)).toFixed(2);
+                }),
+                borderColor: selectedHour === null ? '#0d6efd' : 'rgba(13, 110, 253, 0.5)',
+                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                pointBackgroundColor: hourLabels.map(hour => selectedHour === null || hour === selectedHour ? '#0d6efd' : 'rgba(13, 110, 253, 0.3)'),
+                pointRadius: hourLabels.map(hour => hour === selectedHour ? 6 : 3),
+                fill: true,
+                tension: 0.4,
+                pointHoverRadius: 6
+            }
+        ]
+    };
+
+    // --- Chart Options & Handlers ---
+
+    // Plugin to draw Last Month Average overlay on Weekly Chart
+    const lastMonthAveragePlugin = {
+        id: 'lastMonthAverageOverlay',
+        afterDatasetsDraw(chart, args, options) {
+            const { ctx, scales: { x, y } } = chart;
+
+            const avgTotal = lastMonthAverage.total;
+            const yPos = y.getPixelForValue(avgTotal);
+
+            chart.getDatasetMeta(0).data.forEach((bar, index) => {
+                const xPos = bar.x;
+                const width = bar.width;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.strokeStyle = '#fd7e14'; // Orange color
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 3]);
+                ctx.moveTo(xPos - width / 2, yPos);
+                ctx.lineTo(xPos + width / 2, yPos);
+                ctx.stroke();
+
+                // Add label "Avg" above the line on the last bar only or first? 
+                // Let's add it to the last bar for clarity or maybe a legend item.
+                // User asked for "Add a small label at the end/top: Avg last month: 18 kWh"
+                // Let's put it on the far right of the chart area or near the last bar.
+                if (index === chart.getDatasetMeta(0).data.length - 1) {
+                    ctx.fillStyle = '#fd7e14';
+                    ctx.font = 'bold 10px sans-serif';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`Avg: ${avgTotal} kWh`, xPos + width / 2 + 5, yPos - 5);
+                }
+
+                ctx.restore();
+            });
+        }
+    };
+
+    const handleWeeklyChartClick = (event, elements) => {
+        if (elements.length > 0) {
+            const index = elements[0].index;
+            const clickedDate = weekLabels[index];
+
+            if (selectedBarDate === clickedDate) {
+                // Deselect
+                setSelectedBarDate(null);
+                const today = new Date();
+                setSelectedDate(today.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                setHourlyViewDate(today.toISOString().split('T')[0]);
+                setComparisonBreakdownData(null);
+            } else {
+                // Select
+                setSelectedBarDate(clickedDate);
+                setSelectedDate(clickedDate);
+
+                // Update breakdown data
+                if (weeklyDataMap[clickedDate]) {
+                    setBreakdownData(weeklyDataMap[clickedDate]);
+                    // Set comparison data to Last Month Average
+                    setComparisonBreakdownData(lastMonthAverage);
+                }
+
+                // Sync hourly view date
+                const d = new Date(clickedDate + ", " + new Date().getFullYear());
+                const offset = d.getTimezoneOffset();
+                const localDate = new Date(d.getTime() - (offset * 60 * 1000));
+                setHourlyViewDate(localDate.toISOString().split('T')[0]);
+                setSelectedHour(null);
+            }
+        }
+    };
+
+    const handleHourlyChartClick = (event, elements) => {
+        if (elements.length > 0) {
+            const index = elements[0].index;
+            const clickedHour = hourLabels[index];
+
+            if (selectedHour === clickedHour) {
+                // Deselect
+                setSelectedHour(null);
+                let dailyTotal = { AC: 0, Kitchen: 0, Laundry: 0, Other: 0 };
+                Object.values(hourlyDataMap).forEach(h => {
+                    dailyTotal.AC += parseFloat(h.AC);
+                    dailyTotal.Kitchen += parseFloat(h.Kitchen);
+                    dailyTotal.Laundry += parseFloat(h.Laundry);
+                    dailyTotal.Other += parseFloat(h.Other);
+                });
+                setBreakdownData(dailyTotal);
+
+                // Reset comparison to Last Month Average (Daily) - or maybe hourly average?
+                // For simplicity, let's keep showing the daily average comparison when viewing daily total.
+                // But if we deselect hour, we are back to viewing the "Day" selected in weekly chart (or today).
+                // If we are in "Day" view, we compare against Last Month Daily Average.
+                setComparisonBreakdownData(lastMonthAverage);
+
+            } else {
+                // Select
+                setSelectedHour(clickedHour);
+
+                if (hourlyDataMap[clickedHour]) {
+                    setBreakdownData({
+                        AC: parseFloat(hourlyDataMap[clickedHour].AC),
+                        Kitchen: parseFloat(hourlyDataMap[clickedHour].Kitchen),
+                        Laundry: parseFloat(hourlyDataMap[clickedHour].Laundry),
+                        Other: parseFloat(hourlyDataMap[clickedHour].Other)
+                    });
+                }
+
+                // For hourly selection, comparing against "Last Month Average" might mean "Average Hourly Usage".
+                // Let's assume average hourly is Daily Average / 24 for simplicity, or just hide comparison for hourly specific view
+                // unless we have specific "Last Month Average for this Hour".
+                // Let's approximate: Last Month Daily Average / 24
+                const hourlyAvg = {
+                    AC: lastMonthAverage.AC / 24,
+                    Kitchen: lastMonthAverage.Kitchen / 24,
+                    Laundry: lastMonthAverage.Laundry / 24,
+                    Other: lastMonthAverage.Other / 24
+                };
+                setComparisonBreakdownData(hourlyAvg);
+            }
+        }
+    };
+
+    const weeklyOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'top', align: 'end' },
+            tooltip: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    afterBody: (tooltipItems) => {
+                        const total = tooltipItems.reduce((a, b) => a + b.raw, 0);
+                        const avg = lastMonthAverage.total;
+                        const diff = ((total - avg) / avg * 100).toFixed(1);
+                        const sign = diff > 0 ? '+' : '';
+                        return [
+                            `Last Month Avg: ${avg} kWh`,
+                            `Difference: ${sign}${diff}%`
+                        ];
+                    }
+                }
+            }
+        },
+        scales: {
+            y: { beginAtZero: true, grid: { color: '#F3F4F6' } },
+            x: { grid: { display: false } }
+        },
+        onClick: handleWeeklyChartClick
+    };
+
+    const hourlyOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'top', align: 'end' },
+            tooltip: { mode: 'index', intersect: false }
+        },
+        scales: {
+            y: { beginAtZero: true, grid: { color: '#F3F4F6' } },
+            x: { grid: { display: false } }
+        },
+        onClick: handleHourlyChartClick
+    };
+
+
+    return (
+        <div className="container-fluid p-0 h-100 d-flex flex-column gap-4 animate-fade-in-up">
+            {/* Header */}
+            <div className="d-flex justify-content-between align-items-center">
+                <div className="d-flex align-items-center gap-3">
+                    <button
+                        onClick={() => setActiveTab('overview')}
+                        className="btn btn-light rounded-circle shadow-sm d-flex align-items-center justify-content-center"
+                        style={{ width: '40px', height: '40px' }}
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div>
+                        <h4 className="fw-bold text-dark mb-0">Usage Breakdown</h4>
+                        <p className="text-muted small mb-0">Detailed analysis of your energy consumption</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* 1. Weekly Usage Breakdown Bar Chart (Top) */}
+            <div className="card border-0 shadow-sm">
+                <div className="card-header bg-white border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 className="fw-bold mb-0 d-flex align-items-center gap-2">
+                        <Calendar size={20} className="text-primary" />
+                        Weekly Performance
+                    </h5>
+
+                    {/* Week Navigation */}
+                    <div className="d-flex align-items-center bg-light rounded-pill px-2 py-1 border">
+                        <button
+                            className="btn btn-sm btn-link text-dark p-0"
+                            onClick={() => setWeekOffset(prev => prev + 1)}
+                            title="Previous Week"
+                        >
+                            <ChevronLeft size={18} />
+                        </button>
+                        <span className="mx-2 small fw-bold text-muted" style={{ minWidth: '80px', textAlign: 'center' }}>
+                            {weekOffset === 0 ? 'Current Week' : `${weekOffset} Week${weekOffset > 1 ? 's' : ''} Ago`}
+                        </span>
+                        <button
+                            className="btn btn-sm btn-link text-dark p-0"
+                            onClick={() => setWeekOffset(prev => Math.max(0, prev - 1))}
+                            disabled={weekOffset === 0}
+                            title="Next Week"
+                        >
+                            <ChevronRight size={18} />
+                        </button>
+                    </div>
+                </div>
+                <div className="card-body" style={{ height: '300px' }}>
+                    <Bar
+                        data={weeklyChartData}
+                        options={weeklyOptions}
+                        plugins={[lastMonthAveragePlugin]}
+                    />
+                </div>
+                <div className="card-footer bg-light border-0 d-flex justify-content-between align-items-center text-muted small py-2 px-4">
+                    <span>Click on any bar to see detailed breakdown.</span>
+                    <div className="d-flex align-items-center gap-2">
+                        <div style={{ width: '20px', height: '0px', borderTop: '2px dashed #fd7e14' }}></div>
+                        <span>Last Month Average</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* 2. Breakdown Values Panel (Middle) */}
+            <div className="card border-0 shadow-sm bg-white">
+                <div className="card-body p-4">
+                    <div className="d-flex align-items-center justify-content-between mb-4">
+                        <h5 className="fw-bold mb-0 d-flex align-items-center gap-2">
+                            <PieChart size={20} className="text-success" />
+                            Breakdown for {selectedHour ? `${hourlyViewDate} @ ${selectedHour}` : selectedDate}
+                        </h5>
+                        <div className="d-flex gap-2">
+                            {Object.entries(breakdownData).map(([key, value]) => (
+                                <span key={key} className="badge bg-light text-dark border">
+                                    {key}: {typeof value === 'number' ? value.toFixed(2) : value} kWh
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Visual Breakdown Bars */}
+                    <div className="d-flex flex-column gap-3">
+                        {Object.entries(breakdownData).map(([key, value], index) => {
+                            const numValue = parseFloat(value);
+                            const total = Object.values(breakdownData).reduce((a, b) => parseFloat(a) + parseFloat(b), 0);
+                            const percentage = total > 0 ? ((numValue / total) * 100).toFixed(1) : 0;
+                            const colors = ['bg-primary', 'bg-warning', 'bg-success', 'bg-secondary'];
+
+                            // Comparison logic
+                            let comparisonMarker = null;
+                            let comparisonText = null;
+                            if (comparisonBreakdownData && comparisonBreakdownData[key] !== undefined) {
+                                const compValue = parseFloat(comparisonBreakdownData[key]);
+                                const diff = ((numValue - compValue) / compValue * 100).toFixed(1);
+                                const sign = diff > 0 ? '+' : '';
+                                const colorClass = diff > 0 ? 'text-danger' : 'text-success'; // Red for higher usage, Green for lower
+                                let TrendIcon = Minus;
+                                if (diff > 0) TrendIcon = ArrowUp;
+                                if (diff < 0) TrendIcon = ArrowDown;
+
+                                comparisonText = (
+                                    <span className={`small ms-2 ${colorClass} d-flex align-items-center gap-1`} style={{ fontSize: '0.75rem' }}>
+                                        (Avg: {compValue.toFixed(2)}, <TrendIcon size={10} /> {sign}{diff}%)
+                                    </span>
+                                );
+                            }
+
+                            return (
+                                <div key={key}>
+                                    <div className="d-flex justify-content-between align-items-center mb-1">
+                                        <span className="fw-bold text-dark d-flex align-items-center">
+                                            {key}
+                                            {comparisonText}
+                                        </span>
+                                        <span className="text-muted small">{numValue.toFixed(2)} kWh ({percentage}%)</span>
+                                    </div>
+                                    <div className="progress position-relative" style={{ height: '10px', overflow: 'visible' }}>
+                                        <div
+                                            className={`progress-bar ${colors[index % colors.length]}`}
+                                            role="progressbar"
+                                            style={{ width: `${percentage}%` }}
+                                        ></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* 3. Hourly Usage Line Chart (Bottom) */}
+            <div className="card border-0 shadow-sm">
+                <div className="card-header bg-white border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
+                    <h5 className="fw-bold mb-0 d-flex align-items-center gap-2">
+                        <Clock size={20} className="text-primary" />
+                        Hourly Usage ({hourlyViewDate})
+                    </h5>
+
+                    {/* Date Picker */}
+                    <input
+                        type="date"
+                        className="form-control form-control-sm rounded-pill border-0 bg-light fw-bold text-primary px-3"
+                        value={hourlyViewDate}
+                        onChange={(e) => {
+                            setHourlyViewDate(e.target.value);
+                            setSelectedDate(new Date(e.target.value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                            setSelectedHour(null);
+                            setSelectedBarDate(null); // Deselect bar if manually changing date
+                            setComparisonBreakdownData(null); // Reset comparison
+                        }}
+                        style={{ width: 'auto' }}
+                    />
+                </div>
+                <div className="card-body" style={{ height: '300px' }}>
+                    <Line
+                        data={hourlyChartData}
+                        options={hourlyOptions}
+                    />
+                </div>
+                <div className="card-footer bg-light border-0 text-center text-muted small py-2">
+                    Click on any point to see specific hour breakdown above.
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default UsageBreakdown;
