@@ -141,10 +141,12 @@ const UsageBreakdown = ({ setActiveTab }) => {
                     const d = hourlyDataMap[hour];
                     return (parseFloat(d.AC) + parseFloat(d.Kitchen) + parseFloat(d.Laundry) + parseFloat(d.Other)).toFixed(2);
                 }),
-                borderColor: selectedHour === null ? '#0d6efd' : 'rgba(13, 110, 253, 0.5)',
-                backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                pointBackgroundColor: hourLabels.map(hour => selectedHour === null || hour === selectedHour ? '#0d6efd' : 'rgba(13, 110, 253, 0.3)'),
+                borderColor: selectedHour === null ? '#0d6efd' : 'rgba(13, 110, 253, 0.2)',
+                backgroundColor: selectedHour === null ? 'rgba(13, 110, 253, 0.1)' : 'rgba(13, 110, 253, 0.05)',
+                pointBackgroundColor: hourLabels.map(hour => selectedHour === null || hour === selectedHour ? '#0d6efd' : 'rgba(13, 110, 253, 0.15)'),
                 pointRadius: hourLabels.map(hour => hour === selectedHour ? 6 : 3),
+                pointBorderColor: hourLabels.map(hour => selectedHour === null || hour === selectedHour ? '#0d6efd' : 'rgba(13, 110, 253, 0.2)'),
+                pointBorderWidth: hourLabels.map(hour => hour === selectedHour ? 2 : 1),
                 fill: true,
                 tension: 0.4,
                 pointHoverRadius: 6
@@ -158,37 +160,28 @@ const UsageBreakdown = ({ setActiveTab }) => {
     const lastMonthAveragePlugin = {
         id: 'lastMonthAverageOverlay',
         afterDatasetsDraw(chart, args, options) {
-            const { ctx, scales: { x, y } } = chart;
+            const { ctx, scales: { x, y }, chartArea: { left, right } } = chart;
 
             const avgTotal = lastMonthAverage.total;
             const yPos = y.getPixelForValue(avgTotal);
 
-            chart.getDatasetMeta(0).data.forEach((bar, index) => {
-                const xPos = bar.x;
-                const width = bar.width;
+            // Draw a single continuous line across the entire chart
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = '#fd7e14'; // Orange color
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]);
+            ctx.moveTo(left, yPos);
+            ctx.lineTo(right, yPos);
+            ctx.stroke();
 
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = '#fd7e14'; // Orange color
-                ctx.lineWidth = 2;
-                ctx.setLineDash([5, 3]);
-                ctx.moveTo(xPos - width / 2, yPos);
-                ctx.lineTo(xPos + width / 2, yPos);
-                ctx.stroke();
+            // Add label at the right end of the line
+            ctx.fillStyle = '#fd7e14';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(`Avg: ${avgTotal} kWh`, right - 5, yPos - 5);
 
-                // Add label "Avg" above the line on the last bar only or first? 
-                // Let's add it to the last bar for clarity or maybe a legend item.
-                // User asked for "Add a small label at the end/top: Avg last month: 18 kWh"
-                // Let's put it on the far right of the chart area or near the last bar.
-                if (index === chart.getDatasetMeta(0).data.length - 1) {
-                    ctx.fillStyle = '#fd7e14';
-                    ctx.font = 'bold 10px sans-serif';
-                    ctx.textAlign = 'right';
-                    ctx.fillText(`Avg: ${avgTotal} kWh`, xPos + width / 2 + 5, yPos - 5);
-                }
-
-                ctx.restore();
-            });
+            ctx.restore();
         }
     };
 
