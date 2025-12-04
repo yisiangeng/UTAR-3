@@ -26,20 +26,6 @@ df = load_data("household_power_cleaned.xlsx")
 print("Data loaded successfully!")
 # predict_next_7days= train_forecast_model(df)
 
-@app.get(/get_weekly_data)
-def get_weekly_data(start: str):
-  # Convert strings to datetime
-    start_date = datetime.fromisoformat(start)
-    end_date = start_date + timedelta(days=6) 
-
-    # This week
-    this_week_df = df.loc[start_date:end_date]  # use .loc for datetime slicing
-    this_week_data = aggregate_week(this_week_df)
-
-    return {
-        "this_week": this_week_data
-    }
-
 @app.get("/compare_weeks")
 def compare_weeks(start: str):
   
@@ -71,10 +57,9 @@ def compare_weeks(start: str):
 def get_energy_performance(start_date: str):
     
     start = datetime.fromisoformat(start_date)
-    end = start + timedelta(days=6) 
-
-    week_df = df.loc[start:end]
-
+    end = start + timedelta(days=7)  # add full 7 days
+    week_df = df.loc[start:end - timedelta(seconds=1)] 
+    
     daily_summary = (
         week_df.groupby(week_df.index.date)[['Sub_metering_1','Sub_metering_2','Sub_metering_3']]
         .sum()
