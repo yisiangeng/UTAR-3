@@ -1,10 +1,11 @@
 # from predictor import train_forecast_model
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from loader import load_data
-from processor import aggregate_week
+from .loader import load_data
+from .processor import aggregate_week
 from datetime import datetime, timedelta 
 import pandas as pd
+import os
 
 app = FastAPI()
 
@@ -22,7 +23,8 @@ def read_root():
 
 # Load dataset once
 print("Loading data... This may take a few seconds.")
-df = load_data("household_power_cleaned.xlsx")
+data_file = os.path.join(os.path.dirname(__file__), "household_power_cleaned.xlsx")
+df = load_data(data_file)
 print("Data loaded successfully!")
 # predict_next_7days= train_forecast_model(df)
 
